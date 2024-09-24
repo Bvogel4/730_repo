@@ -5,39 +5,36 @@ from mpl_toolkits.mplot3d import Axes3D
 import astropy.units as u
 import astropy.constants as const
 from integrator import euler_cromer
+from integrator import evolve_system
 from plotting import plot_trajectories_2d
+import time
+import pickle
 
 import numpy as np
 
-def total_energy(w, m):
-    """
-    Find the total kinetic energy K and the total potential energy U
-    given the array m of masses and the array w of position and velocity
-    components in 3D.
-    """
-    N = int(w.size / 6)  # Now 6 components per body (x, y, z, vx, vy, vz)
-    v_x = w[3*N: 4*N]
-    v_y = w[4*N: 5*N]
-    v_z = w[5*N: 6*N]
-    v2 = v_x**2 + v_y**2 + v_z**2
-    K = 0.5 * np.dot(m, v2)
 
-    U = 0.0
-    for j in range(N-1):
-        for k in range(j+1, N):
-            x_kj = w[k] - w[j]
-            y_kj = w[N+k] - w[N+j]
-            z_kj = w[2*N+k] - w[2*N+j]
-            r = np.sqrt(x_kj**2 + y_kj**2 + z_kj**2)
-            U = U - m[j]*m[k]/r
+def t_dyn(IC):
+    m = np.array(IC['masses'], dtype=np.float64)
+    r = np.sqrt(IC['x'] ** 2 + IC['y'] ** 2 + IC['z'] ** 2)
+    r = np.average(r)
+    return np.sqrt(r ** 3 / m.sum())
 
-    return K, U
-
-
+def circular_orbit_velocity(IC):
+    M = IC['masses'][0]
+    r = np.sqrt(IC['x'] ** 2 + IC['y'] ** 2 + IC['z'] ** 2)
+    r = r[0]
+    return np.sqrt( M / (4* r))
 
 
 #part c
-def main(initial_conditions):
+def run_simulation(initial_conditions,load=True):
+    """
+    Run the simulation for the given initial conditions
+    save and load the trajectory
+    :param initial_conditions:
+    :param load:
+    :return:
+    """
     N = initial_conditions['N']
     m = np.array(initial_conditions['masses'], dtype=np.float64)
 
@@ -52,78 +49,100 @@ def main(initial_conditions):
 
     dT = initial_conditions['dT']
     tp = initial_conditions['tp']
+    tol = 1e-7
 
-    w, T = euler_cromer(dT, tp, w0, m)
+    if load == True:
+        try:
+            with open(f'N_{N}_dT_{dT}_tp_{tp}.pkl', 'rb') as f:
+                w,T = pickle.load(f)
+        except:
+            print('File not found, running simulation')
+            w, T,dt = evolve_system(dT, tp, w0, m, tol)
+    else:
+        w, T,dt = evolve_system(dT, tp, w0, m, tol)
 
-    plot_trajectories_2d(w, N)
+    #save the trajectory
+    #store w, T in a pickle file
+    with open(f'N_{N}_dT_{dT}_tp_{tp}.pkl', 'wb') as f:
+        pickle.dump([w,T], f)
+
+
+
+
+
+    #w, T = euler_cromer(dT, tp, w0, m)
+
+    # fig, ax = plt.subplots()
+    # ax.plot(T, dt)
+    # ax.set_yscale('log')
+    # ax.set_xlabel('Time')
+    # ax.set_ylabel('dt')
+    # plt.show()
+
+    plot_trajectories_2d(w, N,T,initial_conditions)
 
     return w, T
 
 
-
+IC_list = [
+    {
+        'N': 2,
+        'masses': np.ones(2, dtype=np.float64),
+        'x': np.zeros(2, dtype=np.float64),
+        'y': np.array([10, -10]),
+        'z': np.zeros(2, dtype=np.float64),
+        'vx': np.zeros(2, dtype=np.float64),
+        'vy': np.zeros(2, dtype=np.float64),
+        'vz': np.zeros(2, dtype=np.float64),
+        'dT': 1,
+        'tp': 30
+    },
+    {
+        'N': 5,
+        'masses': np.ones(5, dtype=np.float64),
+        'x': np.array((-1,9,-11,4,-1), dtype=np.float64),
+        'y': np.array((9,-1,-11,-1,4), dtype=np.float64),
+        'z': np.array((-1,-1,4,-6,4), dtype=np.float64),
+        'vx': np.array((-0.7,0.3,0.8,-0.7,0.3), dtype=np.float64),
+        'vy': np.array((0.1,1.1,-0.4,0.1,-0.9), dtype=np.float64),
+        'vz': np.zeros(5, dtype=np.float64),
+        'dT': 0.5,
+        'tp': 20
+    }
+]
 
 if __name__ == "__main__":
-    # Example initial conditions for a 3D three-body system
-    N = 2
 
-    # noinspection PyDictCreation
-    IC = {
-        'N': 2,
-        'masses': np.ones(N, dtype=np.float64),  # units of solar masses
-        'x': np.zeros(N, dtype=np.float64),  # units of AU
-        'y': np.zeros(N, dtype=np.float64),
-        'z': np.zeros(N, dtype=np.float64),
-        'vx': np.zeros(N, dtype=np.float64),  # units of AU/year
-        'vy': np.zeros(N, dtype=np.float64),
-        'vz': np.zeros(N, dtype=np.float64),
-        'dT': .01,  # units of years
-        'tp': 30  # units of years
-    }
-    IC['y'] = np.array([10, -10])
+    # compute time to run code
+    start = time.time()
 
-    #calculate the velocity needed to have a circular orbit
-    G = 4 * np.pi ** 2  # AU^3 / (M_sun * year^2)
-    M = 1  # Total mass of the system in solar masses (1 + 1)
-    r = 10  # Orbital radius in AU
-    v0 = np.sqrt(G * M / (4 * r))
-
-    T = 2 * np.pi * r / v0
-    IC['T'] = T
-    IC['vx'] = np.array([-v0, v0])
 
 
     #units of stars are in solar masses, units of distances are in AU, units of time are in years
     #make dimensionsless, so far we have 1 solar mass, 1 AU, 1 year
     #from keplers third law T^2 = 4pi^2 a^3 / GM
     #In units of solar masses, AU, and years, G = 4pi^2
+    # so to make G = 1, we multiply by mass by  4pi^2
 
-    # so to make G = 1, we divide by mass by  4pi^2
-    mass_conversion = 4*np.pi**2
-    IC['masses'] = (IC['masses'])*mass_conversion
+    #run simulation for each set of initial conditions
+    for IC in IC_list:
+        t_d = t_dyn(IC)
+        IC['tp'] = 3 * t_d
+        IC['dT'] = t_d / 2000
 
-    W,T = main(IC)
-    n_out_tot = T.size
-    E = np.zeros(n_out_tot)
-    for j in range(n_out_tot):
-        w = W[j, :]
-        K, U = total_energy(w, IC['masses'])
-        E[j] = K + U
-
-    #get the relative error
-    E_error = abs(E - E[0])/E[0]
-
-    fig,ax = plt.subplots()
-    ax.plot(T, abs(E - E[0])/E[0])
-    ax.set_xlabel('Time')
-
-    #get energy error from beginning to end
-    print(E_error[0], E_error[-1])
-    plt.show()
+        IC['masses'] = IC['masses'] * (4 * np.pi ** 2)
+        if IC['N'] == 2:
+            v0 = circular_orbit_velocity(IC)
+            print('v0:', v0)
+            IC['vx'] = np.array([v0, -v0], dtype=np.float64)
+            T = 2 * np.pi / v0 * 10
+            IC['tp'] = T
+        run_simulation(IC)
 
 
+    print('Time to run code:', time.time() - start)
 
 
-# will need to come up with a stratgey to use an adaptive time step
 
 
 

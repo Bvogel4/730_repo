@@ -17,7 +17,7 @@ def f_Nbody_3d(w, m):
     m = the array of masses (in units with G=1) for the N bodies
 
     Output:
-    f = the array of time derivatives of the elements of w.
+    U = the array of time derivatives of the elements of w.
     """
 
     N = int(len(w) / 6)
@@ -33,16 +33,16 @@ def f_Nbody_3d(w, m):
             A[j, k] = m[k] * q
             A[k, j] = -m[j] * q
 
-    f = np.zeros(6 * N)
+    u = np.zeros(6 * N)
     for j in range(N):
-        f[j] = w[3 * N + j]  # v_x
-        f[N + j] = w[4 * N + j]  # v_y
-        f[2 * N + j] = w[5 * N + j]  # v_z
-        f[3 * N + j] = np.sum(A[j, :, 0])  # a_x
-        f[4 * N + j] = np.sum(A[j, :, 1])  # a_y
-        f[5 * N + j] = np.sum(A[j, :, 2])  # a_z
+        u[j] = w[3 * N + j]  # v_x
+        u[N + j] = w[4 * N + j]  # v_y
+        u[2 * N + j] = w[5 * N + j]  # v_z
+        u[3 * N + j] = np.sum(A[j, :, 0])  # a_x
+        u[4 * N + j] = np.sum(A[j, :, 1])  # a_y
+        u[5 * N + j] = np.sum(A[j, :, 2])  # a_z
 
-    return f
+    return u
 @njit
 def euler_cromer(dT, tfinal, w0, m):
     """
@@ -64,43 +64,129 @@ def euler_cromer(dT, tfinal, w0, m):
 import numpy as np
 
 
-
+@njit
 def euler_cromer_step(dt, w, m):
     """
     Perform a single step of the Euler-Cromer method.
+    v_{n+1} = v_n + dt * a_n
+    x_{n+1} = x_n + dt * v_{n+1}
     """
     N = int(len(w) / 6)
-    f = f_Nbody_3d(w, m)
-    w[3 * N:] = w[3 * N:] + dt * f[3 * N:]  # Update velocities
+    u = f_Nbody_3d(w, m)
+    w[3 * N:] = w[3 * N:] + dt * u[3 * N:]  # Update velocities
     w[:3 * N] = w[:3 * N] + dt * w[3 * N:]  # Update positions
 
     return w
 
 
-def evolve_timestep(dt, t_final, w0, m):
+@njit
+def euler_cromer_adaptive_step(dt, w, m, tol, dt_guess):
     """
-    Use an adaptive timestep by taking two time steps of size dt/2 and dt
-    if error is less than tolerance, keep the result, otherwise, reduce the step size
-    interpolate the results to get the final result as an ordered array of times and positions
+    Perform one or more steps of the Euler-Cromer method with adaptive step size spanning dt.
+    Returns the final state and the last used step size.
+
+    We implement an adaptive step size algorithm that takes two half steps and compares the results to a full step.
+    If the error is within the tolerance, we accept the smaller step. If the error is too large, we reduce the step
+    size and repeat.
     """
-    N = int(len(w0) / 6)
-    n_steps = int(t_final / dt)
-    w = np.zeros((n_steps, len(w0)))
-    w[0] = w0
-    #keep track of our timesteps
     t = 0
-    T = np.arange(0, t_final, dt)
+    dt_current = min(dt_guess, dt)  # Ensure initial guess doesn't exceed target dt
     i = 0
 
+    w0 = np.copy(w)
+    w1 = np.copy(w)
+    w2 = np.copy(w)
 
-    while t < t_final:
-        w_half = euler_cromer_step(dt / 2, w[i - 1], m)
-        w_full = euler_cromer_step(dt, w_half, m)
-        if np.linalg.norm(w_full - w_half) < 1e-10:
-            t=t+dt
+    while t < dt:
+        #store the last step
+        w0 = np.copy(w)
+        t0 = t
+        w1 = np.copy(w)
+        w2 = np.copy(w)
+
+        # Take a full step
+        w1 = euler_cromer_step(dt_current, w1, m)
+
+        # Take two half steps
+        w2 = euler_cromer_step(dt_current / 2, w2, m)
+        w2 = euler_cromer_step(dt_current / 2, w2, m)
+
+        # Compute error
+        error = np.abs(w1 - w2).max()
+        #print(error,dt_current)
+        i = i + 1
+        if error <= tol:
+            # Accept the smaller step
+            w = w2
+            w1 = np.copy(w2)
+            t += dt_current
+            # Increase step size if error is much smaller than tolerance
+            if error < tol / 10:
+                dt_current = min(dt_current * 2, dt)
         else:
-            dt = dt / 2
+            # Reduce step size
+            dt_current = dt_current / 2
+            if dt_current < 1e-10:
+                raise ValueError("Step size underflow")
+        if i > 10**5:
+            raise ValueError("Too many iterations")
+
+    #check if time t is exactly dt within floating point error
+    if np.isclose(t, dt, atol=1e-10):
+        return w , dt_current
+    elif t > dt:
+        #use last stored step and time and take exact step to dt
+        dt = dt - t0
+        w = euler_cromer_step(dt, w0, m)
+        return w, dt_current
+    else:
+        raise ValueError("Time t is less than dt")
+
+@njit
+def evolve_system(dt, t_final, w0, m,tol):
+    """
+    Evolve the system using the Euler-Cromer method with a function to adapt step size for each output time.
+    """
+    assert t_final > dt > 0 # Ensure valid input
+    N = int(len(w0) / 6)
+    n_steps = int(t_final / dt)+1
+    w = np.zeros((n_steps, len(w0)))
+    w[0] = w0
+    dt_guess = dt
+    t = np.arange(0, t_final, dt)
+    dt_guesses = np.ones(n_steps) *np.nan
 
 
 
-    return w
+    for i in range(1, n_steps):
+        #only save times for the specified time steps
+        w[i], dt_guess = euler_cromer_adaptive_step(dt, w[i - 1], m, tol, dt_guess)
+        dt_guesses[i] = dt_guess
+
+
+    return w, t, dt_guesses
+
+def total_energy(w, m):
+    """
+    Find the total kinetic energy K and the total potential energy U
+    given the array m of masses and the array w of position and velocity
+    components in 3D.
+    """
+    N = int(w.size / 6)  # Now 6 components per body (x, y, z, vx, vy, vz)
+    v_x = w[3*N: 4*N]
+    v_y = w[4*N: 5*N]
+    v_z = w[5*N: 6*N]
+    v2 = v_x**2 + v_y**2 + v_z**2
+    K = 0.5 * np.dot(m, v2)
+
+    U = 0.0
+    for j in range(N-1):
+        for k in range(j+1, N):
+            x_kj = w[k] - w[j]
+            y_kj = w[N+k] - w[N+j]
+            z_kj = w[2*N+k] - w[2*N+j]
+            r = np.sqrt(x_kj**2 + y_kj**2 + z_kj**2)
+            U = U - m[j]*m[k]/r
+
+    return K, U
+
