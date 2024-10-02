@@ -1,14 +1,20 @@
-import math
 
-# Constants
-G = 4 * math.pi**2  # AU^3 / (M_sun * year^2)
-M = 1  # Total mass of the system in solar masses (1 + 1)
-r = 10  # Orbital radius in AU
 
-# Calculate orbital velocity
-v = math.sqrt(G * M /(4 *r))
+phi = .007
+m_sun = 1.898e33
+c = 2.998e10
+L_sun = 3.846e33
 
-T = 2 * math.pi * r/ v
 
-print(f"The orbital velocity is {v} AU/year")
-print(f"The orbital period is {T} years")
+
+t_nuc = m_sun*.007*.13*.7*c**2 / L_sun
+print(t_nuc)
+
+
+print(f'The time it takes for the sun to burn 7% of its mass is {t_nuc:.2e} seconds')
+#years
+t_nuc = t_nuc/(60*60*24*365)
+print(f'The time it takes for the sun to burn 7% of its mass is {t_nuc:.5} years')
+
+import numpy as np
+

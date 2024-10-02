@@ -4,6 +4,31 @@ from numba import njit
 from mpl_toolkits.mplot3d import Axes3D
 import astropy.units as u
 import astropy.constants as const
+@njit
+def total_energy(w, m):
+    """
+    Find the total kinetic energy K and the total potential energy U
+    given the array m of masses and the array w of position and velocity
+    components in 3D.
+    """
+    N = int(w.size / 6)  # Now 6 components per body (x, y, z, vx, vy, vz)
+    v_x = w[3*N: 4*N]
+    v_y = w[4*N: 5*N]
+    v_z = w[5*N: 6*N]
+    v2 = v_x**2 + v_y**2 + v_z**2
+    K = 0.5 * np.dot(m, v2)
+
+    U = 0.0
+    for j in range(N-1):
+        for k in range(j+1, N):
+            x_kj = w[k] - w[j]
+            y_kj = w[N+k] - w[N+j]
+            z_kj = w[2*N+k] - w[2*N+j]
+            r = np.sqrt(x_kj**2 + y_kj**2 + z_kj**2)
+            U = U - m[j]*m[k]/r
+
+    return K, U
+
 
 @njit
 def f_Nbody_3d(w, m):
@@ -113,9 +138,17 @@ def euler_cromer_adaptive_step(dt, w, m, tol, dt_guess):
 
         # Compute error
         error = np.abs(w1 - w2).max()
+
+        #compute energy error for adaptive step size too between the beginning of the step and the end of the step
+        #K0, U0 = total_energy(w0, m)
+        #K1, U1 = total_energy(w2, m)
+        #energy_error = np.abs(K0 + U0 - K1 - U1)#/np.abs(K0 + U0)
+        #energy_error = 0
         #print(error,dt_current)
+        #energy error should be a little more forgiving than the position error
+
         i = i + 1
-        if error <= tol:
+        if error <= tol: #and energy_error < tol:
             # Accept the smaller step
             w = w2
             w1 = np.copy(w2)
@@ -128,8 +161,11 @@ def euler_cromer_adaptive_step(dt, w, m, tol, dt_guess):
             dt_current = dt_current / 2
             if dt_current < 1e-10:
                 raise ValueError("Step size underflow")
-        if i > 10**5:
+        if i > 10**7:
             raise ValueError("Too many iterations")
+        #also make sure dt does not get too small
+        if dt_current < 1e-10:
+            raise ValueError("Step size underflow")
 
     #check if time t is exactly dt within floating point error
     if np.isclose(t, dt, atol=1e-10):
@@ -165,28 +201,3 @@ def evolve_system(dt, t_final, w0, m,tol):
 
 
     return w, t, dt_guesses
-
-def total_energy(w, m):
-    """
-    Find the total kinetic energy K and the total potential energy U
-    given the array m of masses and the array w of position and velocity
-    components in 3D.
-    """
-    N = int(w.size / 6)  # Now 6 components per body (x, y, z, vx, vy, vz)
-    v_x = w[3*N: 4*N]
-    v_y = w[4*N: 5*N]
-    v_z = w[5*N: 6*N]
-    v2 = v_x**2 + v_y**2 + v_z**2
-    K = 0.5 * np.dot(m, v2)
-
-    U = 0.0
-    for j in range(N-1):
-        for k in range(j+1, N):
-            x_kj = w[k] - w[j]
-            y_kj = w[N+k] - w[N+j]
-            z_kj = w[2*N+k] - w[2*N+j]
-            r = np.sqrt(x_kj**2 + y_kj**2 + z_kj**2)
-            U = U - m[j]*m[k]/r
-
-    return K, U
-

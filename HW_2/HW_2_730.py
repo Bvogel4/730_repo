@@ -27,7 +27,7 @@ def circular_orbit_velocity(IC):
 
 
 #part c
-def run_simulation(initial_conditions,load=True):
+def run_simulation(initial_conditions,load=False):
     """
     Run the simulation for the given initial conditions
     save and load the trajectory
@@ -49,7 +49,7 @@ def run_simulation(initial_conditions,load=True):
 
     dT = initial_conditions['dT']
     tp = initial_conditions['tp']
-    tol = 1e-7
+    tol = 1e-8
 
     if load == True:
         try:
@@ -66,20 +66,9 @@ def run_simulation(initial_conditions,load=True):
     with open(f'N_{N}_dT_{dT}_tp_{tp}.pkl', 'wb') as f:
         pickle.dump([w,T], f)
 
-
-
-
-
-    #w, T = euler_cromer(dT, tp, w0, m)
-
-    # fig, ax = plt.subplots()
-    # ax.plot(T, dt)
-    # ax.set_yscale('log')
-    # ax.set_xlabel('Time')
-    # ax.set_ylabel('dt')
-    # plt.show()
-
     plot_trajectories_2d(w, N,T,initial_conditions)
+
+    plt.show()
 
     return w, T
 
@@ -112,34 +101,33 @@ IC_list = [
 ]
 
 if __name__ == "__main__":
-
     # compute time to run code
     start = time.time()
-
-
-
     #units of stars are in solar masses, units of distances are in AU, units of time are in years
     #make dimensionsless, so far we have 1 solar mass, 1 AU, 1 year
     #from keplers third law T^2 = 4pi^2 a^3 / GM
     #In units of solar masses, AU, and years, G = 4pi^2
     # so to make G = 1, we multiply by mass by  4pi^2
-
     #run simulation for each set of initial conditions
     for IC in IC_list:
         t_d = t_dyn(IC)
         IC['tp'] = 3 * t_d
         IC['dT'] = t_d / 2000
-
         IC['masses'] = IC['masses'] * (4 * np.pi ** 2)
+        #also run with lower v0
+
         if IC['N'] == 2:
+            print(t_d)
             v0 = circular_orbit_velocity(IC)
             print('v0:', v0)
             IC['vx'] = np.array([v0, -v0], dtype=np.float64)
             T = 2 * np.pi / v0 * 10
             IC['tp'] = T
-        run_simulation(IC)
-
-
+            run_simulation(IC)
+            IC['vx'] = np.array([v0/2, -v0/2], dtype=np.float64)
+            run_simulation(IC)
+        else:
+            run_simulation(IC)
     print('Time to run code:', time.time() - start)
 
 
