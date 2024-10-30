@@ -15,5 +15,18 @@
         </JupyterConnectionParameters>
       </list>
     </option>
+    <option name="moduleParameters">
+      <map>
+        <entry key="$PROJECT_DIR$/.idea/pythonProject.iml">
+          <value>
+            <JupyterConnectionParameters>
+              <option name="argv" value="notebook --no-browser --port 8887" />
+              <option name="managed" value="true" />
+              <option name="sdkName" value="" />
+            </JupyterConnectionParameters>
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>
