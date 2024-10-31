@@ -182,7 +182,7 @@ def adaptive_step(dt, w, m, tol, dt_guess):
             dt_current = dt_current / 2
             if dt_current < 1e-10:
                 raise ValueError("Step size underflow")
-        if i > 10**8:
+        if i > 10**7:
             raise ValueError("Too many iterations")
         #also make sure dt does not get too small
         if dt_current < 1e-10:

@@ -153,16 +153,6 @@ def plot_interactive_time_range(W, N, T):
     plt.show()
 
 
-# Usage example:
-# plot_interactive_time_range(W, N, T)
-
-
-
-
-# Usage example:
-# plot_interactive_time_range(W, N, T)
-
-
 
 
 def plot_trajectories_2d(W, N, T, IC,t_dyn,dt):
@@ -253,8 +243,7 @@ def plot_trajectories_2d(W, N, T, IC,t_dyn,dt):
 
     plt.show()
 
-    #create figure showing 6 plots for different time ranges  (2 subplots for each time) x,y and x,z
-    #split arrays into different time ranges
+
 
     plot_interactive_time_range(W, N, T)
 
